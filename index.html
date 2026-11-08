@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe Game</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        h1 {
+            margin-top: 20px;
+            font-size: 2.5em;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 80px #00ffff;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 5px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            font-size: 2em;
+            line-height: 100px;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2), 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+        .cell:hover {
+            transform: scale(1.05);
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .cell.X::after {
+            content: 'X';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 80px #00ffff;
+        }
+        .cell.O::after {
+            content: 'O';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff00ff;
+            text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 40px #ff00ff, 0 0 80px #ff00ff;
+        }
+        .message {
+            margin-top: 20px;
+            font-size: 1.2em;
+            text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 40px #00ff00, 0 0 80px #00ff00;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #fff, 0 0 40px #fff;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2), 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+        button:hover {
+            transform: scale(1.1);
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .timer-input {
+            margin-top: 20px;
+        }
+        input[type="number"] {
+            padding: 5px;
+            font-size: 1em;
+            width: 100px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="confetti"></canvas>
+    <h1>Tic Tac Toe</h1>
+    <div class="timer-input">
+        <label for="timer">Clear board after (seconds): </label>
+        <input type="number" id="timer" min="5" max="30" value="10">
+    </div>
+    <div class="board" id="board"></div>
+    <div class="message" id="message">Player X's turn</div>
+    <div class="controls">
+        <button onclick="startGame()">Start Game</button>
+        <button onclick="resetGame()">Restart Game</button>
+    </div>
+
+    <script>
+        const board = document.getElementById('board');
+        const message = document.getElementById('message');
+        const timerInput = document.getElementById('timer');
+        let currentPlayer = 'X';
+        let gameBoard = ['', '', '', '', '', '', '', '', ''];
+        let isGameActive = false; // Start as inactive until user sets timer
+        let clearBoardTimeouts = [];
+
+        const winningConditions = [
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [0, 3, 6],
+            [1, 4, 7],
+            [2, 5, 8],
+            [0, 4, 8],
+            [2, 4, 6]
+        ];
+
+        function createBoard() {
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.setAttribute('data-index', i);
+                cell.addEventListener('click', handleCellClick);
+                board.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(event) {
+            if (!isGameActive) return;
+
+            const cell = event.target;
+            const index = cell.getAttribute('data-index');
+
+            if (gameBoard[index] !== '' || !isGameActive) {
+                return;
+            }
+
+            gameBoard[index] = currentPlayer;
+            cell.classList.add(currentPlayer);
+
+            // Schedule clearing this specific cell after the timer
+            const timerValue = parseInt(timerInput.value);
+            clearBoardTimeouts.push(setTimeout(() => clearCell(index), timerValue * 1000));
+
+            if (checkWin()) {
+                message.textContent = `Player ${currentPlayer} wins!`;
+                isGameActive = false;
+                startConfetti();
+                return;
+            }
+
+            if (gameBoard.every(cell => cell !== '')) {
+                message.textContent = "It's a draw!";
+                isGameActive = false;
+                return;
+            }
+
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            message.textContent = `Player ${currentPlayer}'s turn`;
+        }
+
+        function checkWin() {
+            return winningConditions.some(condition => {
+                return condition.every(index => gameBoard[index] === currentPlayer);
+            });
+        }
+
+        function resetGame() {
+            // Clear all pending timeouts
+            clearBoardTimeouts.forEach(timeout => clearTimeout(timeout));
+            clearBoardTimeouts = [];
+            gameBoard = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'X';
+            isGameActive = false; // Wait for user to set timer again
+            message.textContent = "Set timer and start the game!";
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('X', 'O');
+            });
+            stopConfetti();
+        }
+
+        function startGame() {
+            const timerValue = parseInt(timerInput.value);
+            if (isNaN(timerValue) || timerValue < 5 || timerValue > 30) {
+                alert("Please enter a valid time between 5 and 30 seconds.");
+                return;
+            }
+            resetGame();
+            isGameActive = true;
+            message.textContent = `Player ${currentPlayer}'s turn`;
+        }
+
+        function clearCell(index) {
+            const cells = document.querySelectorAll('.cell');
+            const cell = cells[index];
+            if (cell) {
+                cell.classList.remove('X', 'O');
+                gameBoard[index] = '';
+            }
+        }
+
+        createBoard();
+
+        // Confetti logic
+        const canvas = document.getElementById('confetti');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const confettiColors = ['#00ffff', '#ff00ff', '#00ff00', '#ffff00', '#ff0000'];
+        const confettiCount = 200;
+        const confettis = [];
+
+        class Confetti {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height - canvas.height;
+                this.size = Math.random() * 5 + 2;
+                this.speed = Math.random() * 3 + 1;
+                this.angle = Math.random() * 360;
+                this.color = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+            }
+
+            update() {
+                this.y += this.speed;
+                this.angle += 5;
+                if (this.y > canvas.height) {
+                    this.y = -10;
+                    this.x = Math.random() * canvas.width;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate((this.angle * Math.PI) / 180);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        function initConfetti() {
+            for (let i = 0; i < confettiCount; i++) {
+                confettis.push(new Confetti());
+            }
+        }
+
+        let animationId;
+        function animateConfetti() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            confettis.forEach(confetti => {
+                confetti.update();
+                confetti.draw();
+            });
+            animationId = requestAnimationFrame(animateConfetti);
+        }
+
+        function startConfetti() {
+            initConfetti();
+            animateConfetti();
+        }
+
+        function stopConfetti() {
+            cancelAnimationFrame(animationId);
+            confettis.length = 0;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    </script>
+</body>
+</html>
